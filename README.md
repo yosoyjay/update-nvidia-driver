@@ -151,7 +151,7 @@ NCCL version 2.19.3+cuda12.2
 
 ## Update OFED driver from MLNX_OFED_LINUX-23.10-0.5.5.0 to MLNX_OFED_LINUX-23.10-1.1.9.0
 
-### Remove old driver ()
+### Remove old driver (MLNX_OFED_LINUX-23.10-0.5.5.0)
 
 ```bash
 sudo /etc/init.d/openibd stop

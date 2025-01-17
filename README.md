@@ -1,6 +1,6 @@
-# Update Nvidia Linux driver on Debian 10.13 with 5.10.0-0.deb10.16-amd64 kernel
+# Update Nvidia Linux driver on Debian 10.13 with 5.10.0-0.deb10.16-amd64 kernel for use with H200
 
-Steps used to update the Nvidia Linux driver from 535.86.10 to 565.57.01 to support H200 GPUs on Debian 10.13 test image.  Also includes steps to update OFED driver from MLNX_OFED_LINUX-23.10-0.5.5.0 to MLNX_OFED_LINUX-23.10-1.1.9.0.
+Steps to update the Nvidia Linux driver from 535.86.10 to 550.127.08 to support H200 GPUs on AzHPC Debian 10.13 test image and steps to update OFED driver from MLNX_OFED_LINUX-23.10-0.5.5.0 to MLNX_OFED_LINUX-23.10-1.1.9.0.
 
 Updates on production image should verify checksums of installed packages and perform extensive testing.  Skipped here for brevity.
 
@@ -19,6 +19,42 @@ Uninstall driver:
 
 ```bash
 sudo /usr/bin/nvidia-uninstall
+$ cat /var/log/nvidia-uninstall.log
+nvidia-installer log file '/var/log/nvidia-uninstall.log'
+creation time: Fri Jan 17 01:16:17 2025
+installer version: 535.86.10
+
+PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+nvidia-installer command line:
+    /usr/bin/nvidia-uninstall
+
+Using: nvidia-installer ncurses v6 user interface
+-> Detected 96 CPUs online; setting concurrency level to 32.
+-> If you plan to no longer use the NVIDIA driver, you should make sure that no X screens are configured to use the NVIDIA X driver in your X configuration file. If you used nvidia-xconfig to configure X, it may have created a backup of your original configuration. Would you like to run `nvidia-xconfig --restore-original-backup` to attempt restoration of the original X configuration file? (Answer: No)
+-> Parsing log file:
+-> done.
+-> Validating previous installation:
+-> done.
+-> Uninstalling NVIDIA Accelerated Graphics Driver for Linux-x86_64 (1.0-5358610 (535.86.10)):
+-> DKMS module detected; removing...
+-> Unable to remove installed file '/lib/modules/5.10.0-0.deb10.16-amd64/kernel/drivers/video/nvidia.ko' (No such file or directory).
+-> Unable to remove installed file '/lib/modules/5.10.0-0.deb10.16-amd64/kernel/drivers/video/nvidia-uvm.ko' (No such file or directory).
+-> Unable to remove installed file '/lib/modules/5.10.0-0.deb10.16-amd64/kernel/drivers/video/nvidia-modeset.ko' (No such file or directory).
+-> Unable to remove installed file '/lib/modules/5.10.0-0.deb10.16-amd64/kernel/drivers/video/nvidia-drm.ko' (No such file or directory).
+-> Unable to remove installed file '/lib/modules/5.10.0-0.deb10.16-amd64/kernel/drivers/video/nvidia-peermem.ko' (No such file or directory).
+WARNING: Failed to remove some installed files/symlinks. See /var/log/nvidia-uninstall.log for details
+-> Failed to delete the directory '/etc/OpenCL/vendors' (Directory not empty).
+-> Failed to delete the directory '/usr/share/nvidia' (Directory not empty).
+-> Failed to delete the directory '/etc/OpenCL' (Directory not empty).
+WARNING: Failed to delete some directories. See /var/log/nvidia-uninstall.log for details.
+-> Unable to delete directories created by previous installation.
+-> done.
+-> Running depmod and ldconfig:
+-> done.
+-> Running `/usr/bin/systemctl daemon-reload`:
+-> done.
+-> Uninstallation of existing driver: NVIDIA Accelerated Graphics Driver for Linux-x86_64 (535.86.10) is complete.
 ```
 
 Remove fabricmanager package:
@@ -27,20 +63,40 @@ Remove fabricmanager package:
 sudo dpkg -r nvidia-fabricmanager-535
 ```
 
+Reboot VM because driver may still be loaded.
+
+```bash
+sudo reboot
+```
+
 ### Install newer Nvidia Linux driver
 
 Download driver and install.
 
 ```bash
-wget https://us.download.nvidia.com/tesla/565.57.01/NVIDIA-Linux-x86_64-565.57.01.run
-sudo sh NVIDIA-Linux-x86_64-565.57.01.run --silent --dkms
+wget https://us.download.nvidia.com/tesla/550.127.08/NVIDIA-Linux-x86_64-550.127.08.run
+sudo sh NVIDIA-Linux-x86_64-550.127.08.run --silent --dkms
 ```
 
-Download and install matching fabricmanager version.  There is no supported version for Debian 10, so I tried the only version available Debian 12 and it worked.
+Download and install matching fabricmanager.
 
 ```bash
-wget https://developer.download.nvidia.com/compute/cuda/repos/debian12/x86_64/nvidia-fabricmanager-565_565.57.01-1_amd64.deb .
-sudo dpkg -i nvidia-fabricmanager-565_565.57.01-1_amd64.deb
+wget https://developer.download.nvidia.com/compute/cuda/repos/debian10/x86_64/nvidia-fabricmanager-550_550.127.08-1_amd64.deb
+sudo dpkg -i nvidia-fabricmanager-550_550.127.08-1_amd64.deb
+```
+
+Download and install libnvidia-nscq if it is not installed.
+
+```bash
+wget https://developer.download.nvidia.com/compute/cuda/repos/debian10/x86_64/libnvidia-nscq-550_550.127.08-1_amd64.deb
+sudo dpkg -i libnvidia-nscq-550_550.127.08-1_amd64.deb
+```
+
+Download and install dcgm if it is not installed.
+
+```bash
+wget https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/datacenter-gpu-manager_3.1.8_amd64.deb
+sudo dpkg -i ./datacenter-gpu-manager_3.1.8_amd64.deb
 ```
 
 Reload systemd services
@@ -53,48 +109,48 @@ sudo systemctl restart nvidia-fabricmanager
 
 ### Test
 
-Make sure `nvidia-smi` works:
+1. Test `nvidia-smi`.  Ensure that driver version 550.127.08 is in the output.
 
 ```bash
 $ nvidia-smi
-Wed Jan 15 23:35:00 2025
+Fri Jan 17 01:28:11 2025
 +-----------------------------------------------------------------------------------------+
-| NVIDIA-SMI 565.57.01              Driver Version: 565.57.01      CUDA Version: 12.7     |
+| NVIDIA-SMI 550.127.08             Driver Version: 550.127.08     CUDA Version: 12.4     |
 |-----------------------------------------+------------------------+----------------------+
 | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
 | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
 |                                         |                        |               MIG M. |
 |=========================================+========================+======================|
 |   0  NVIDIA H200                    Off |   00000001:00:00.0 Off |                    0 |
-| N/A   34C    P0            123W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   30C    P0             78W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 |   1  NVIDIA H200                    Off |   00000002:00:00.0 Off |                    0 |
-| N/A   33C    P0            123W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   29C    P0             76W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 |   2  NVIDIA H200                    Off |   00000003:00:00.0 Off |                    0 |
-| N/A   31C    P0            121W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   28C    P0             76W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 |   3  NVIDIA H200                    Off |   00000008:00:00.0 Off |                    0 |
-| N/A   33C    P0            119W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   30C    P0             78W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 |   4  NVIDIA H200                    Off |   00000009:00:00.0 Off |                    0 |
-| N/A   31C    P0            121W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   28C    P0             76W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 |   5  NVIDIA H200                    Off |   0000000A:00:00.0 Off |                    0 |
-| N/A   35C    P0            119W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   30C    P0             80W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 |   6  NVIDIA H200                    Off |   0000000B:00:00.0 Off |                    0 |
-| N/A   32C    P0            120W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   29C    P0             77W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 |   7  NVIDIA H200                    Off |   0000000C:00:00.0 Off |                    0 |
-| N/A   34C    P0            120W /  700W |       1MiB / 143771MiB |      0%      Default |
+| N/A   30C    P0             76W /  700W |       1MiB / 143771MiB |      0%      Default |
 |                                         |                        |             Disabled |
 +-----------------------------------------+------------------------+----------------------+
 
@@ -105,6 +161,54 @@ Wed Jan 15 23:35:00 2025
 |=========================================================================================|
 |  No running processes found                                                             |
 +-----------------------------------------------------------------------------------------+
+```
+
+2. Test `dcgmi -r 1`.  It should finish in a few seconds.  If it does not, it indicates that something is wrong with the installation.
+
+```bash
+$ dcgmi diag -r 1
+Successfully ran diagnostic for group.
++---------------------------+------------------------------------------------+
+| Diagnostic                | Result                                         |
++===========================+================================================+
+|-----  Metadata  ----------+------------------------------------------------|
+| DCGM Version              | 3.1.8                                          |
+| Driver Version Detected   | 550.127.08                                     |
+| GPU Device IDs Detected   | 2335,2335,2335,2335,2335,2335,2335,2335        |
+|-----  Deployment  --------+------------------------------------------------|
+| Denylist                  | Pass                                           |
+| NVML Library              | Pass                                           |
+| CUDA Main Library         | Pass                                           |
+| Permissions and OS Blocks | Pass                                           |
+| Persistence Mode          | Fail                                           |
+| Error                     | Persistence mode for GPU 0 is currently disab  |
+|                           | led. The DCGM diagnostic requires peristence   |
+|                           | mode to be enabled. Enable persistence mode b  |
+|                           | y running "nvidia-smi -i <gpuId> -pm 1 " as r  |
+|                           | oot., Persistence mode for GPU 1 is currently  |
+|                           |  disabled. The DCGM diagnostic requires peris  |
+|                           | tence mode to be enabled. Enable persistence   |
+|                           | mode by running "nvidia-smi -i <gpuId> -pm 1   |
+|                           | " as root., Persistence mode for GPU 2 is cur  |
+|                           | rently disabled. The DCGM diagnostic requires  |
+|                           |  peristence mode to be enabled. Enable persis  |
+|                           | tence mode by running "nvidia-smi -i <gpuId>   |
+|                           | -pm 1 " as root., Persistence mode for GPU 3   |
+|                           | is currently disabled. The DCGM diagnostic re  |
+|                           | quires peristence mode to be enabled. Enable   |
+|                           | persistence mode by running "nvidia-smi -i <g  |
+|                           | puId> -pm 1 " as root., Persistence mode for   |
+|                           | GPU 4 is currently disabled. The DCGM diagnos  |
+|                           | tic requires peristence mode to be enabled. E  |
+|                           | nable persistence mode by running "nvidia-smi  |
+|                           |  -i <gpuId> -pm 1 " as root., Persistence mod  |
+|                           | e for GPU 5 is currently disabled. The DCGM d  |
+|                           | iagnostic requires peristence mod              |
+| Environment Variables     | Pass                                           |
+| Page Retirement/Row Remap | Pass                                           |
+| Graphics Processes        | Pass                                           |
+| Inforom                   | Pass                                           |
++---------------------------+------------------------------------------------+
 ```
 
 Run NCCL all-reduce as real test:
@@ -130,22 +234,22 @@ mpirun --allow-run-as-root \
 # nThread 1 nGpus 1 minBytes 8589934592 maxBytes 8589934592 step: 2(factor) warmup iters: 5 iters: 10 agg iters: 1 validation: 1 graph: 0
 #
 # Using devices
-#  Rank  0 Group  0 Pid  39280 on test-h200-dsvm device  0 [0x00] NVIDIA H200
-#  Rank  1 Group  0 Pid  39281 on test-h200-dsvm device  1 [0x00] NVIDIA H200
-#  Rank  2 Group  0 Pid  39282 on test-h200-dsvm device  2 [0x00] NVIDIA H200
-#  Rank  3 Group  0 Pid  39283 on test-h200-dsvm device  3 [0x00] NVIDIA H200
-#  Rank  4 Group  0 Pid  39284 on test-h200-dsvm device  4 [0x00] NVIDIA H200
-#  Rank  5 Group  0 Pid  39285 on test-h200-dsvm device  5 [0x00] NVIDIA H200
-#  Rank  6 Group  0 Pid  39286 on test-h200-dsvm device  6 [0x00] NVIDIA H200
-#  Rank  7 Group  0 Pid  39287 on test-h200-dsvm device  7 [0x00] NVIDIA H200
+#  Rank  0 Group  0 Pid  23690 on test-h200-deb device  0 [0x00] NVIDIA H200
+#  Rank  1 Group  0 Pid  23691 on test-h200-deb device  1 [0x00] NVIDIA H200
+#  Rank  2 Group  0 Pid  23692 on test-h200-deb device  2 [0x00] NVIDIA H200
+#  Rank  3 Group  0 Pid  23693 on test-h200-deb device  3 [0x00] NVIDIA H200
+#  Rank  4 Group  0 Pid  23694 on test-h200-deb device  4 [0x00] NVIDIA H200
+#  Rank  5 Group  0 Pid  23695 on test-h200-deb device  5 [0x00] NVIDIA H200
+#  Rank  6 Group  0 Pid  23696 on test-h200-deb device  6 [0x00] NVIDIA H200
+#  Rank  7 Group  0 Pid  23697 on test-h200-deb device  7 [0x00] NVIDIA H200
 NCCL version 2.19.3+cuda12.2
 #
 #                                                              out-of-place                       in-place
 #       size         count      type   redop    root     time   algbw   busbw #wrong     time   algbw   busbw #wrong
 #        (B)    (elements)                               (us)  (GB/s)  (GB/s)            (us)  (GB/s)  (GB/s)
-  8589934592    2147483648     float     sum      -1    31533  272.41  476.72      0    31441  273.20  478.11      0
+  8589934592    2147483648     float     sum      -1    31517  272.55  476.96      0    31516  272.56  476.98      0
 # Out of bounds values : 0 OK
-# Avg bus bandwidth    : 477.416
+# Avg bus bandwidth    : 476.967
 #
 ```
 
